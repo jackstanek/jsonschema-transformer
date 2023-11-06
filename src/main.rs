@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use egg::{rewrite as rw, *};
 
 define_language! {
@@ -14,21 +16,38 @@ define_language! {
     }
 }
 
+#[derive(Debug)]
+enum Transformer {
+    Num2Bool,
+    RemoveKey,
+    InvertList,
+}
+
+impl Display for Transformer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
+}
+
 fn main() {
-    let mut rules: Vec<Rewrite<Schema, ()>> = vec![
-        rw!("num->bool"; "num" => "bool"),
-        rw!("remove-key"; "(obj ?x ?y)" => "?y"),
+    use Transformer::*;
+    let rules: Vec<Rewrite<Schema, ()>> = vec![
+        rw!(Num2Bool; "num" => "bool"),
+        rw!(RemoveKey; "(obj ?x ?y)" => "?y"),
+        rw!(InvertList; "(arr (obj (pair ?x ?y) ?z))" => "(obj (pair ?x (arr ?y)) ?z)")
     ];
-    let lexpr: RecExpr<Schema> = "(obj (pair foo num) empty)".parse().unwrap();
-    let rexpr: RecExpr<Schema> = "(obj (pair foo bool) empty)".parse().unwrap();
+    let lexpr: RecExpr<Schema> = "(arr (obj (pair foo num) (obj (pair bar bool) empty)))".parse().unwrap();
+    let rexpr: RecExpr<Schema> = "(obj (pair foo (arr num)) (obj (pair bar (arr bool)) empty))".parse().unwrap();
     let mut runner = Runner::<Schema, ()>::default()
         .with_explanations_enabled()
         .with_expr(&lexpr)
         .run(&rules);
 
     if !runner.egraph.equivs(&lexpr, &rexpr).is_empty() {
-        println!("{:?}", runner.explain_equivalence(&lexpr, &rexpr).make_flat_explanation());
+        let mut expl = runner
+            .explain_equivalence(&lexpr, &rexpr);
+        println!("{}", expl.get_flat_string())
     } else {
-        println!("Not equivalent")
+        println!("Cannot synthesize transformer between schemas");
     }
 }
