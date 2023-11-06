@@ -1,71 +1,34 @@
-use std::{collections::HashMap, sync::Arc};
+use egg::{rewrite as rw, *};
 
-use serde_json::{Value, json, Map};
-
-#[derive(Debug)]
-enum SchemaNode {
-    List {
-        items: Arc<SchemaNode>,
-    },
-    Object {
-        properties: HashMap<String, SchemaNode>,
-        additional_properties: Arc<SchemaNode>,
-    },
-    Number,
-    String,
-    Null,
-    Bool,
-
-    // Special schemas
-    False, // Validation always fails
-    True,  // Validation always succeeds
-}
-
-impl SchemaNode {
-    fn object_node(schema: Map<String, Value>) -> Result<SchemaNode, SchemaErr> {
-        for (key, value) in schema {
-            match key.as_str() {
-                "type" => if let Value::String(tyname) = value {
-                    match tyname.as_str() {
-                        "bool"   => 
-                        "number" => 
-                        "null" => 
-                        "bool" => 
-                        "bool" => 
-                        "bool" => 
-                    }
-                }
-            }    
-        }
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-enum SchemaErr {
-    InvalidSchema,
-}
-
-impl TryFrom<Value> for SchemaNode {
-    type Error = SchemaErr;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        use SchemaErr::*;
-        match value {
-            Value::Bool(val) => Ok(if val {
-                SchemaNode::True
-            } else {
-                SchemaNode::False
-            }),
-            Value::Object(schema) => Self::object_node(schema),
-            _ => Err(InvalidSchema),
-        }
+define_language! {
+    enum Schema {
+        "bool"  = Bool,
+        "num"   = Num,
+        "null"  = Null,
+        "str"   = Str,
+        "arr"   = Arr(Id),
+        "obj"   = Obj([Id; 2]),
+        "pair"  = Pair([Id; 2]),
+        "empty" = Empty,
+        Key(Symbol),
     }
 }
 
 fn main() {
-    let raw_schema = json!({
-        "type": "bool"
-    });
-    println!("{:?}", SchemaNode::try_from(raw_schema));
+    let mut rules: Vec<Rewrite<Schema, ()>> = vec![
+        rw!("num->bool"; "num" => "bool"),
+        rw!("remove-key"; "(obj ?x ?y)" => "?y"),
+    ];
+    let lexpr: RecExpr<Schema> = "(obj (pair foo num) empty)".parse().unwrap();
+    let rexpr: RecExpr<Schema> = "(obj (pair foo bool) empty)".parse().unwrap();
+    let mut runner = Runner::<Schema, ()>::default()
+        .with_explanations_enabled()
+        .with_expr(&lexpr)
+        .run(&rules);
+
+    if !runner.egraph.equivs(&lexpr, &rexpr).is_empty() {
+        println!("{:?}", runner.explain_equivalence(&lexpr, &rexpr).make_flat_explanation());
+    } else {
+        println!("Not equivalent")
+    }
 }
