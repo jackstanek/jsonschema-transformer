@@ -21,6 +21,7 @@ enum Transformer {
     Num2Bool,
     RemoveKey,
     InvertList,
+    ReorderKeys,
 }
 
 impl Display for Transformer {
@@ -32,12 +33,12 @@ impl Display for Transformer {
 fn main() {
     use Transformer::*;
     let rules: Vec<Rewrite<Schema, ()>> = vec![
-        rw!(Num2Bool; "num" => "bool"),
-        rw!(RemoveKey; "(obj ?x ?y)" => "?y"),
-        rw!(InvertList; "(arr (obj (pair ?x ?y) ?z))" => "(obj (pair ?x (arr ?y)) ?z)")
+        //rw!(InvertList; "(obj (pair ?x (arr ?y)) ?z)" => "(obj"),
+        //rw!(Num2Bool; "num" => "bool"),
+        rw!(ReorderKeys; "(obj (pair ?x ?y) (obj (pair ?z ?w) ?a))" => "(obj (pair ?z ?w) (obj (pair ?x ?y) ?a))"),
     ];
-    let lexpr: RecExpr<Schema> = "(arr (obj (pair foo num) (obj (pair bar bool) empty)))".parse().unwrap();
-    let rexpr: RecExpr<Schema> = "(obj (pair foo (arr num)) (obj (pair bar (arr bool)) empty))".parse().unwrap();
+    let lexpr: RecExpr<Schema> = "(obj (pair foo num) (obj (pair bar bool) (obj (pair baz str) empty)))".parse().unwrap();
+    let rexpr: RecExpr<Schema> = "(obj (pair baz str) (obj (pair foo num) (obj (pair bar bool) empty)))".parse().unwrap();
     let mut runner = Runner::<Schema, ()>::default()
         .with_explanations_enabled()
         .with_expr(&lexpr)
