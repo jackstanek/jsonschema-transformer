@@ -1,0 +1,104 @@
+{
+    "title": "Advanced Schema",
+    "type": "object",
+    "properties": {
+        "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+        },
+        "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+        },
+        "age": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120
+        },
+        "email": {
+            "type": "string",
+            "format": "email"
+        },
+        "homeAddress": {
+            "type": "object",
+            "properties": {
+                "street": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                },
+                "city": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                },
+                "state": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                },
+                "zip": {
+                    "type": "string",
+                    "pattern": "^[0-9]{5}$"
+                }
+            },
+            "required": [
+                "street",
+                "city",
+                "state",
+                "zip"
+            ],
+            "additionalProperties": false
+        },
+        "workAddress": {
+            "type": "object",
+            "properties": {
+                "street": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                },
+                "city": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                },
+                "state": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                },
+                "zip": {
+                    "type": "string",
+                    "pattern": "^[0-9]{5}$"
+                }
+            },
+            "required": [
+                "street",
+                "city",
+                "state",
+                "zip"
+            ],
+            "additionalProperties": false
+        },
+        "homePhone": {
+            "type": "string",
+            "pattern": "^[0-9]{3}-[0-9]{3}-[0-9]{4}$"
+        },
+        "workPhone": {
+            "type": "string",
+            "pattern": "^[0-9]{3}-[0-9]{3}-[0-9]{4}$"
+        }
+    },
+    "required": [
+        "firstName",
+        "lastName",
+        "age",
+        "email",
+        "homeAddress",
+        "workAddress",
+        "homePhone",
+        "workPhone"
+    ],
+    "additionalProperties": false
+}

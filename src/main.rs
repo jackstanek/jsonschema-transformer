@@ -18,9 +18,9 @@ define_language! {
 
 #[derive(Debug)]
 enum Transformer {
-    Num2Bool,
-    RemoveKey,
-    InvertList,
+    // Num2Bool,
+    // RemoveKey,
+    // InvertList,
     ReorderKeys,
 }
 

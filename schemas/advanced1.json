@@ -1,0 +1,68 @@
+{
+    "title": "Advanced Schema",
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+        },
+        "age": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 120
+        },
+        "email": {
+            "type": "string",
+            "format": "email"
+        },
+        "address": {
+            "type": "object",
+            "properties": {
+                "street": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                },
+                "city": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                },
+                "state": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                },
+                "zip": {
+                    "type": "string",
+                    "pattern": "^[0-9]{5}$"
+                }
+            },
+            "required": [
+                "street",
+                "city",
+                "state",
+                "zip"
+            ],
+            "additionalProperties": false
+        },
+        "phoneNumbers": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "pattern": "^[0-9]{3}-[0-9]{3}-[0-9]{4}$"
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+        }
+    },
+    "required": [
+        "name",
+        "age",
+        "email",
+        "address",
+        "phoneNumbers"
+    ],
+    "additionalProperties": false
+}
