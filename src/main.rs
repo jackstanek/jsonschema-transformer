@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use egg::{rewrite as rw, *};
 
+mod schema;
+
 define_language! {
     enum Schema {
         "bool"  = Bool,
