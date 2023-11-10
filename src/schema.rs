@@ -11,7 +11,7 @@ use serde_json::Value;
 /// Inf represents a path that doesn't exist. (i.e. all distances of sound
 /// transform paths are of finite length.)
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord)]
-enum ExtNat {
+pub enum ExtNat {
     Nat(u64),
     Inf,
 }
@@ -56,10 +56,18 @@ impl AddAssign for ExtNat {
 /// Error while parsing a [`Schema`] from json. One of these errors will be returned
 /// in the case that the json is not our case of valid.
 #[derive(Debug)]
-enum SchemaErr {
+pub enum SchemaErr {
     InvalidSchema,
     ArrNeedsItems,
     ObjNeedsProperties,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Ground {
+    Num,
+    Bool,
+    String,
+    Null,
 }
 
 /// Top-level schema representation. Num, Bool, String, and Null represent
@@ -68,11 +76,8 @@ enum SchemaErr {
 /// map between the property names and their respective schemas. True and False
 /// are trivial schemas which always or never validate, respectively.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-enum Schema {
-    Num,
-    Bool,
-    String,
-    Null,
+pub enum Schema {
+    Ground(Ground),
     Arr(Arc<Schema>),
     Obj(BTreeMap<Arc<String>, Arc<Schema>>),
     True,
@@ -152,7 +157,23 @@ impl TryFrom<&Value> for Schema {
 }
 
 impl Schema {
-    fn edit_distance(&self, other: &Self) -> ExtNat {
+    fn num() -> Self {
+        Self::Ground(Ground::Num)
+    }
+
+    fn bool() -> Self {
+        Self::Ground(Ground::Bool)
+    }
+
+    fn string() -> Self {
+        Self::Ground(Ground::String)
+    }
+
+    fn null() -> Self {
+        Self::Ground(Ground::Null)
+    }
+
+    pub fn edit_distance(&self, other: &Self) -> ExtNat {
         use ExtNat::*;
         use Schema::*;
 
@@ -196,20 +217,21 @@ impl Schema {
 #[cfg(test)]
 mod tests {
     use super::ExtNat::*;
+    use super::Schema;
     use super::Schema::*;
     use crate::schema;
 
     #[test]
     fn test_same_base_type_edit_dist() {
-        let v1 = Bool;
-        let v2 = Bool;
+        let v1 = Schema::bool();
+        let v2 = Schema::bool();
         assert_eq!(v1.edit_distance(&v2), Nat(0));
     }
 
     #[test]
     fn test_base_type_edit_dist() {
-        let v1 = Bool;
-        let v2 = Num;
+        let v1 = Schema::bool();
+        let v2 = Schema::num();
         assert_eq!(v1.edit_distance(&v2), Nat(1));
     }
 
