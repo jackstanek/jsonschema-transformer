@@ -72,7 +72,7 @@ enum Schema {
     String,
     Null,
     Arr(Arc<Schema>),
-    Obj(BTreeMap<Arc<str>, Arc<Schema>>),
+    Obj(BTreeMap<Arc<String>, Arc<Schema>>),
     True,
     False,
 }
@@ -124,7 +124,21 @@ impl TryFrom<&Value> for Schema {
                                 Err(InvalidSchema)
                             }
                         }
-                        "object" => todo!(),
+                        "object" => {
+                            let props = obj.get("properties");
+                            let mut subschemas = BTreeMap::new();
+                            if let Some(Value::Object(props)) = props {
+                                for (prop, subschema) in props.iter() {
+                                    subschemas.insert(
+                                        Arc::new(prop.clone()),
+                                        Arc::new(Self::try_from(subschema)?),
+                                    );
+                                }
+                                Ok(Schema::Obj(subschemas))
+                            } else {
+                                Err(InvalidSchema)
+                            }
+                        }
                         _ => Err(InvalidSchema),
                     };
                 }
