@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use egg::{rewrite as rw, *};
 
+mod ir;
 mod schema;
 
 define_language! {
