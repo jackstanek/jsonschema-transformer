@@ -8,10 +8,18 @@
       "type": "boolean"
     },
     "objectValue": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "foo": {
+            "type": "string"
+        }
+      }
     },
     "arrayValue": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "numberValue": {
       "type": "number"
