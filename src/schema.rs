@@ -119,10 +119,10 @@ impl TryFrom<&Value> for Schema {
                 let ty = obj.get("type").ok_or(InvalidSchema)?;
                 if let Value::String(tyname) = ty {
                     return match tyname.as_str() {
-                        "number" => Ok(Self::Num),
-                        "string" => Ok(Self::String),
-                        "boolean" => Ok(Self::Bool),
-                        "null" => Ok(Self::Null),
+                        "number" => Ok(Self::num()),
+                        "string" => Ok(Self::string()),
+                        "boolean" => Ok(Self::bool()),
+                        "null" => Ok(Self::null()),
                         "array" => {
                             return if let Some(item_type) = obj.get("items") {
                                 let item_type = Self::try_from(item_type)?;
@@ -278,7 +278,8 @@ mod tests {
         });
         assert_eq!(v1.edit_distance(&v2), Nat(2))
     }
-    
+
+    // change path to wherever your project is located
     #[test]
     fn test_open_file() {
         let path = "/Users/dkillough/Desktop/gradschool/jsonschema-transformer/schemas/simple.json";
@@ -295,10 +296,18 @@ mod tests {
                     "type": "boolean"
                   },
                   "objectValue": {
-                    "type": "object"
+                    "type": "object",
+                    "properties": {
+                        "foo": {
+                            "type": "string"
+                        },
+                    }
                   },
                   "arrayValue": {
-                    "type": "array"
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                   },
                   "numberValue": {
                     "type": "number"
