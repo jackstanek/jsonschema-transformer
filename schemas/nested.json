@@ -1,0 +1,35 @@
+{
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "nullValue": {
+                "type": "null"
+            },
+            "booleanValue": {
+                "type": "boolean"
+            },
+            "objectValue": {
+                "type": "object"
+            },
+            "arrayValue": {
+                "type": "array"
+            },
+            "numberValue": {
+                "type": "number"
+            },
+            "stringValue": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false,
+        "required": [
+            "nullValue",
+            "booleanValue",
+            "objectValue",
+            "arrayValue",
+            "numberValue",
+            "stringValue"
+        ]
+    }
+}

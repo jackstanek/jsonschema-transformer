@@ -53,11 +53,13 @@ impl AddAssign for ExtNat {
     }
 }
 
-/// Error while parsing a [`Schema`] from json. There is currently only one
-/// error case, but this could be expanded in the future.
+/// Error while parsing a [`Schema`] from json. One of these errors will be returned
+/// in the case that the json is not our case of valid.
 #[derive(Debug)]
 pub enum SchemaErr {
     InvalidSchema,
+    ArrNeedsItems,
+    ObjNeedsProperties,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -126,7 +128,7 @@ impl TryFrom<&Value> for Schema {
                                 let item_type = Self::try_from(item_type)?;
                                 Ok(Schema::Arr(Arc::new(item_type)))
                             } else {
-                                Err(InvalidSchema)
+                                Err(ArrNeedsItems)
                             }
                         }
                         "object" => {
@@ -141,7 +143,7 @@ impl TryFrom<&Value> for Schema {
                                 }
                                 Ok(Schema::Obj(subschemas))
                             } else {
-                                Err(InvalidSchema)
+                                Err(ObjNeedsProperties)
                             }
                         }
                         _ => Err(InvalidSchema),
@@ -275,5 +277,56 @@ mod tests {
             }
         });
         assert_eq!(v1.edit_distance(&v2), Nat(2))
+    }
+
+    // change path to wherever your project is located
+    #[test]
+    fn test_open_file() {
+        let path = "/Users/dkillough/Desktop/gradschool/jsonschema-transformer/schemas/simple.json";
+        let file = std::fs::read_to_string(path).unwrap();
+        let json_schema: serde_json::Value = serde_json::from_str(&file).unwrap();
+        let testjson = schema!(
+            {
+                "type": "object",
+                "properties": {
+                  "nullValue": {
+                    "type": "null"
+                  },
+                  "booleanValue": {
+                    "type": "boolean"
+                  },
+                  "objectValue": {
+                    "type": "object",
+                    "properties": {
+                        "foo": {
+                            "type": "string"
+                        },
+                    }
+                  },
+                  "arrayValue": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                  },
+                  "numberValue": {
+                    "type": "number"
+                  },
+                  "stringValue": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "nullValue",
+                  "booleanValue",
+                  "objectValue",
+                  "arrayValue",
+                  "numberValue",
+                  "stringValue"
+                ],
+                "additionalProperties": false
+              }
+        );
+        assert_eq!(testjson, super::Schema::try_from(&json_schema).unwrap());
     }
 }
