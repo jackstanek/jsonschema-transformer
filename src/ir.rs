@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::schema::Ground;
 
 /// IR for schema transformers
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IR {
     G2G(Ground, Ground),
     Del(Arc<String>),
@@ -30,7 +30,7 @@ impl Codegen for JSCodegen {
         for op in it {
             match op {
                 IR::G2G(_, _) => {
-                    fnbody.push("input = parseInt(input); ")
+                    fnbody.push("input = parseInt(input);")
                 },
                 IR::PushArr => todo!(),
                 IR::PushObj(_) => todo!(),
@@ -41,7 +41,7 @@ impl Codegen for JSCodegen {
                 IR::Extr(_) => todo!(),
             }
         }
-        format!("function(input) {{ {} return input }}", fnbody.join("\n"))
+        format!("function(input) {{ {} return input; }}", fnbody.join(" "))
     }
 }
 
@@ -54,6 +54,6 @@ mod tests {
         let code = JSCodegen{}.generate(vec![
             IR::G2G(Ground::String, Ground::Num)
         ].into_iter());
-        assert_eq!("function(input) { input = parseInt(input); return input }", code)
+        assert_eq!("function(input) { input = parseInt(input); return input; }", code)
     }
 }

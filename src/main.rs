@@ -17,10 +17,10 @@ fn main() -> Result<(), std::io::Error> {
     let s2 = schema::Schema::try_from(&s2_json).expect("first schema valid");
 
     let mut schr = searcher::SchemaSearcher::new();
-    if let Err(_) = schr.search_pathes(&s1, &s2) {
-        println!("No path between schemas")
-    } else {
-        println!("path exists between schemas")
-    }
+    //if let Err(_) = schr.search_pathes(&s1, &s2) {
+    //    println!("No path between schemas")
+    //} else {
+    //    println!("path exists between schemas")
+    //}
     Ok(())
 }
