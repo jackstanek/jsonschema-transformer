@@ -48,7 +48,7 @@ impl AddAssign for ExtNat {
     }
 }
 
-trait Searcher<T, I, E> {
+pub trait Searcher<T, I, E> {
     fn find_path(&mut self, lhs: &T, rhs: &T) -> Result<Vec<I>, E>;
 }
 
@@ -125,7 +125,28 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
                         }
                     }
                     (Obj(_), Arr(_)) => todo!(),
-                    (Obj(_), Obj(_)) => todo!(),
+                    (Obj(o1), Obj(o2)) => {
+                        let mut path = Vec::new();
+                        for k2 in o2.keys() {
+                            if !o1.contains_key(k2) {
+                                return Err(NoPath);
+                            }
+                        }
+
+                        for (k1, v1) in o1.iter() {
+                            if let Some(v2) = o2.get(k1) {
+                                let mut key_conv = self.find_path(v1, v2)?;
+                                if !key_conv.is_empty() {
+                                    path.push(IR::PushObj(k1.clone()));
+                                    path.append(&mut key_conv);
+                                    path.push(IR::Pop);
+                                }
+                            } else {
+                                path.push(IR::Del(k1.clone()));
+                            }
+                        }
+                        path
+                    }
                     (True, _) | (_, True) => vec![],
                     (False, _) | (_, False) => return Err(NoPath),
                 };
@@ -137,25 +158,25 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{sync::Arc, vec};
 
     use itertools::iproduct;
 
     use super::*;
-    use crate::schema::Ground;
+    use crate::{schema, schema::Ground};
     use Ground::*;
     use Schema::*;
 
     const GROUNDS: [Ground; 4] = [Bool, Num, String, Null];
 
     macro_rules! assert_path {
-        ($from:expr, $to:expr, $expected:expr) => (
-            {
-                let mut searcher = SchemaSearcher::new();
-                let path = searcher.find_path(&$from, &$to).expect("failed to find path");
-                assert_eq!(path, $expected)
-            }
-        );
+        ($from:expr, $to:expr, $expected:expr) => {{
+            let mut searcher = SchemaSearcher::new();
+            let path = searcher
+                .find_path(&$from, &$to)
+                .expect("failed to find path");
+            assert_eq!(path, $expected)
+        }};
     }
 
     #[test]
@@ -174,7 +195,7 @@ mod tests {
     fn test_abstract_into_object() {
         for (from, to) in iproduct!(GROUNDS, GROUNDS) {
             if from == to {
-                continue
+                continue;
             }
             let g2g = IR::G2G(from, to);
 
@@ -189,5 +210,33 @@ mod tests {
             let path = vec![g2g, IR::Abs(key)];
             assert_path!(from, to, path);
         }
+    }
+
+    #[test]
+    fn test_converting_objects() {
+        let from = schema!({
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "number"
+                },
+                "bar": {
+                    "type": "boolean"
+                }
+            }
+        });
+        let to = schema!({
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "string"
+                },
+                "bar": {
+                    "type": "boolean"
+                }
+            }
+        });
+        let expected = vec![IR::PushObj(Arc::new("foo".to_string())), IR::G2G(Num, String), IR::Pop];
+        assert_path!(from, to, expected);
     }
 }
