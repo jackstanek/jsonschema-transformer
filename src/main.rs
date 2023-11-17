@@ -1,37 +1,6 @@
-use std::fmt::Display;
-
-use egg::{rewrite as rw, *};
-
 mod ir;
 mod schema;
-
-define_language! {
-    enum Schema {
-        "bool"  = Bool,
-        "num"   = Num,
-        "null"  = Null,
-        "str"   = Str,
-        "arr"   = Arr(Id),
-        "obj"   = Obj([Id; 2]),
-        "pair"  = Pair([Id; 2]),
-        "empty" = Empty,
-        Key(Symbol),
-    }
-}
-
-#[derive(Debug)]
-enum Transformer {
-    // Num2Bool,
-    // RemoveKey,
-    // InvertList,
-    ReorderKeys,
-}
-
-impl Display for Transformer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:?}", self))
-    }
-}
+mod searcher;
 
 fn main() -> Result<(), std::io::Error> {
     let s1_path = std::env::args().nth(1).expect("need first argument");
@@ -47,6 +16,11 @@ fn main() -> Result<(), std::io::Error> {
     let s1 = schema::Schema::try_from(&s1_json).expect("first schema valid");
     let s2 = schema::Schema::try_from(&s2_json).expect("first schema valid");
 
-    println!("edit distance between schemas: {:?}", s1.edit_distance(&s2));
+    let mut schr = searcher::SchemaSearcher::new();
+    if let Err(_) = schr.search_pathes(&s1, &s2) {
+        println!("No path between schemas")
+    } else {
+        println!("path exists between schemas")
+    }
     Ok(())
 }
