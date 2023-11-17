@@ -1,15 +1,6 @@
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-    ops::*,
-    path::Path,
-    sync::Arc,
-};
+use std::{cmp::Ordering, collections::BTreeMap, ops::*};
 
-use crate::{
-    ir::IR,
-    schema::{self, Ground, Schema, SchemaErr},
-};
+use crate::{ir::IR, schema::Schema};
 
 /// Extended natural numbers (naturals plus infinity). Used for edit distances;
 /// Inf represents a path that doesn't exist. (i.e. all distances of sound
@@ -96,13 +87,14 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
                     (Ground(_), Arr(_)) => {
                         return Err(NoPath); // TODO: Implement this?
                     }
-                    (Ground(g), Obj(o)) => {
+                    (Ground(_), Obj(o)) => {
                         if o.keys().len() != 1 {
                             return Err(NoPath);
                         }
                         let (k, v) = o.iter().nth(0).unwrap();
-                        let mut path = vec![IR::Abs(k.clone())];
-                        path.append(&mut self.find_path(v.as_ref(), rhs)?);
+
+                        let mut path = self.find_path(lhs, v)?;
+                        path.push(IR::Abs(k.clone()));
                         path
                     }
                     (Arr(_), Ground(_)) => return Err(NoPath),
@@ -145,26 +137,57 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use itertools::iproduct;
 
     use super::*;
-    use crate::schema::Ground::*;
+    use crate::schema::Ground;
+    use Ground::*;
     use Schema::*;
+
+    const GROUNDS: [Ground; 4] = [Bool, Num, String, Null];
+
+    macro_rules! assert_path {
+        ($from:expr, $to:expr, $expected:expr) => (
+            {
+                let mut searcher = SchemaSearcher::new();
+                let path = searcher.find_path(&$from, &$to).expect("failed to find path");
+                assert_eq!(path, $expected)
+            }
+        );
+    }
 
     #[test]
     fn test_ground_to_ground() {
-        for (from, to) in iproduct!([Bool, Num, String, Null], [Bool, Num, String, Null]) {
-            let mut searcher = SchemaSearcher::new();
-            assert_eq!(
-                if from != to {
-                    vec![IR::G2G(from, to)]
-                } else {
-                    Vec::new()
-                },
-                searcher
-                    .find_path(&Schema::Ground(from), &Schema::Ground(to))
-                    .expect("found path")
-            );
+        for (from, to) in iproduct!(GROUNDS, GROUNDS) {
+            let path = if from != to {
+                vec![IR::G2G(from, to)]
+            } else {
+                Vec::new()
+            };
+            assert_path!(Ground(from), Ground(to), path);
+        }
+    }
+
+    #[test]
+    fn test_abstract_into_object() {
+        for (from, to) in iproduct!(GROUNDS, GROUNDS) {
+            if from == to {
+                continue
+            }
+            let g2g = IR::G2G(from, to);
+
+            let from = Ground(from);
+            let to = Arc::new(Ground(to));
+
+            let key = Arc::new("some_foo_key".to_string());
+            let mut map = BTreeMap::new();
+            map.insert(key.clone(), to.clone());
+
+            let to = Obj(map);
+            let path = vec![g2g, IR::Abs(key)];
+            assert_path!(from, to, path);
         }
     }
 }
