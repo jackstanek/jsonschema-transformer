@@ -1,8 +1,9 @@
+mod codegen;
 mod ir;
 mod schema;
 mod searcher;
 
-use ir::{Codegen, JSCodegen};
+use codegen::{Codegen, JSCodegen};
 use searcher::Searcher;
 
 fn main() -> Result<(), std::io::Error> {
