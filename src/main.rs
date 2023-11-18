@@ -22,7 +22,7 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut schr = searcher::SchemaSearcher::new();
     let code = schr.find_path(&s1, &s2).and_then(|path| {
-        let gen = JSCodegen {};
+        let gen = JSCodegen::new("input".to_string());
         let code = gen.generate(path.into_iter());
         Ok(code)
     });

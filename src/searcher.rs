@@ -124,7 +124,9 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
                             return Err(NoPath);
                         }
                     }
-                    (Obj(_), Arr(_)) => todo!(),
+                    (Obj(_), Arr(_)) => {
+                        return Err(NoPath); // TODO: Implement array/object inversion
+                    }
                     (Obj(o1), Obj(o2)) => {
                         let mut path = Vec::new();
                         for k2 in o2.keys() {
@@ -236,7 +238,30 @@ mod tests {
                 }
             }
         });
-        let expected = vec![IR::PushObj(Arc::new("foo".to_string())), IR::G2G(Num, String), IR::Pop];
+        let expected = vec![
+            IR::PushObj(Arc::new("foo".to_string())),
+            IR::G2G(Num, String),
+            IR::Pop,
+        ];
+        assert_path!(from, to, expected);
+    }
+
+    #[test]
+    fn test_extracting_key() {
+        let from = schema!({
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "number"
+                }
+            }
+        });
+
+        let to = schema!({
+            "type": "number"
+        });
+
+        let expected = vec![IR::Extr(Arc::new("foo".to_string()))];
         assert_path!(from, to, expected);
     }
 }
