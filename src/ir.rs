@@ -8,10 +8,13 @@ pub enum IR {
     G2G(Ground, Ground),
     Del(Arc<String>),
     PushArr,
-    PushObj(Arc<String>),
+    PopArr,
+    PushObj,
+    PopObj,
+    PushKey(Arc<String>),
+    PopKey,
     Abs(Arc<String>),
     Extr(Arc<String>),
     Inv,
-    Pop,
 }
 

@@ -102,7 +102,7 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
                         let mut inner_conv = self.find_path(&s1, &s2)?;
                         let mut path = vec![IR::PushArr];
                         path.append(&mut inner_conv);
-                        path.push(IR::Pop);
+                        path.push(IR::PopArr);
                         path
                     }
                     (Arr(_), Obj(_)) => {
@@ -135,18 +135,20 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
                             }
                         }
 
+                        path.push(IR::PushObj);
                         for (k1, v1) in o1.iter() {
                             if let Some(v2) = o2.get(k1) {
                                 let mut key_conv = self.find_path(v1, v2)?;
                                 if !key_conv.is_empty() {
-                                    path.push(IR::PushObj(k1.clone()));
+                                    path.push(IR::PushKey(k1.clone()));
                                     path.append(&mut key_conv);
-                                    path.push(IR::Pop);
+                                    path.push(IR::PopKey);
                                 }
                             } else {
                                 path.push(IR::Del(k1.clone()));
                             }
                         }
+                        path.push(IR::PopObj);
                         path
                     }
                     (True, _) | (_, True) => vec![],
@@ -239,9 +241,11 @@ mod tests {
             }
         });
         let expected = vec![
-            IR::PushObj(Arc::new("foo".to_string())),
+            IR::PushObj,
+            IR::PushKey(Arc::new("foo".to_string())),
             IR::G2G(Num, String),
-            IR::Pop,
+            IR::PopKey,
+            IR::PopObj
         ];
         assert_path!(from, to, expected);
     }
