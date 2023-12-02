@@ -6,13 +6,13 @@ use crate::schema::Ground;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IR {
     G2G(Ground, Ground),
-    Del(Arc<String>),
     PushArr,
     PopArr,
     PushObj,
     PopObj,
     PushKey(Arc<String>),
     PopKey,
+    Copy,
     Abs(Arc<String>),
     Extr(Arc<String>),
     Inv,

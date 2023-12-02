@@ -79,7 +79,7 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
                 let path = match (lhs, rhs) {
                     (Ground(g1), Ground(g2)) => {
                         if g1 == g2 {
-                            vec![]
+                            vec![IR::Copy]
                         } else {
                             vec![IR::G2G(*g1, *g2)]
                         }
@@ -139,13 +139,9 @@ impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
                         for (k1, v1) in o1.iter() {
                             if let Some(v2) = o2.get(k1) {
                                 let mut key_conv = self.find_path(v1, v2)?;
-                                if !key_conv.is_empty() {
-                                    path.push(IR::PushKey(k1.clone()));
-                                    path.append(&mut key_conv);
-                                    path.push(IR::PopKey);
-                                }
-                            } else {
-                                path.push(IR::Del(k1.clone()));
+                                path.push(IR::PushKey(k1.clone()));
+                                path.append(&mut key_conv);
+                                path.push(IR::PopKey);
                             }
                         }
                         path.push(IR::PopObj);
@@ -189,7 +185,7 @@ mod tests {
             let path = if from != to {
                 vec![IR::G2G(from, to)]
             } else {
-                Vec::new()
+                vec![IR::Copy]
             };
             assert_path!(Ground(from), Ground(to), path);
         }
@@ -242,10 +238,13 @@ mod tests {
         });
         let expected = vec![
             IR::PushObj,
+            IR::PushKey(Arc::new("bar".to_string())),
+            IR::Copy,
+            IR::PopKey,
             IR::PushKey(Arc::new("foo".to_string())),
             IR::G2G(Num, String),
             IR::PopKey,
-            IR::PopObj
+            IR::PopObj,
         ];
         assert_path!(from, to, expected);
     }

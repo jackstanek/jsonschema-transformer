@@ -1,10 +1,4 @@
-use std::{
-    array, clone,
-    fmt::{format, Display},
-    sync::Arc,
-};
-
-use serde_json::json;
+use std::{fmt::Display, sync::Arc};
 
 use crate::{ir::IR, schema::Ground};
 
@@ -129,7 +123,14 @@ impl JSCodegen {
     fn new_var(&mut self, prefix: &str) -> String {
         let varname = format!("{}{}", prefix, self.uniq);
         self.uniq += 1;
-        varname.to_string()
+        varname
+    }
+
+    fn new_obj(&mut self, prefix: &str) -> Level {
+        let varname = self.new_var(prefix);
+        let obj = Level::Var(varname);
+        self.varstack.push(obj.clone());
+        obj
     }
 
     fn generate_ground_to_ground(&self, from: Ground, to: Ground) -> Option<String> {
@@ -171,15 +172,17 @@ impl Codegen for JSCodegen {
 
     fn generate<I: Iterator<Item = IR>>(mut self, it: I) -> Self::Output {
         use Level::*;
+        use IR::*;
+
         let mut frags = Vec::new();
         for op in it {
             match op {
-                IR::G2G(from, to) => {
+                G2G(from, to) => {
                     if let Some(frag) = self.generate_ground_to_ground(from, to) {
                         frags.push(frag)
                     }
                 }
-                IR::PushArr => {
+                PushArr => {
                     let arrname = self.new_var("arr");
                     let idx = self.new_var("idx");
                     frags.push(format!("let {} = [];", arrname));
@@ -192,25 +195,44 @@ impl Codegen for JSCodegen {
                     ));
                     self.varstack.push(Arr(arrname.clone(), idx.clone()));
                 }
-                IR::PopArr => {
+                PopArr => {
                     let popvar = self.poptop();
-                    if let Level::Arr(var, _) = popvar {
+                    if let Arr(var, _) = popvar {
                         frags.push("}".to_string());
                         frags.push(format!("{} = {};", self.output_path(), var));
                     } else {
                         panic!("PopArr instruction executed but top of stack was not arr");
                     }
                 }
-                IR::PushKey(_) => todo!(),
-                IR::PopKey => todo!(),
-                IR::PushObj => {
-                    todo!()
+                PushKey(k) => {
+                    self.varstack.push(Key(k));
+                },
+                PopKey => {
+                    if let Some(top) = self.varstack.pop() {
+                        if let Key(_) = top {
+                        } else {
+                            panic!("PopKey instruction executed but top of stack was not a key")
+                        }
+                    }
                 }
-                IR::Abs(_) => todo!(),
-                IR::Del(_) => todo!(),
-                IR::Inv => todo!(),
-                IR::Extr(_) => todo!(),
-                IR::PopObj => todo!(),
+                PushObj => {
+                    let var = self.new_obj("obj");
+                    frags.push(format!("let {} = {{}};", var));
+                }
+                PopObj => {
+                    let top = self.poptop();
+                    frags.push(format!("{} = {};", self.output_path(), top))
+                }
+                Abs(k) => {
+                    let objname = self.new_var("obj");
+                    frags.push(format!("{} = {{\"{}\": {}}}", objname, k, self.peektop()));
+                    
+                }
+                Copy => {
+                    frags.push(format!("{} = structuredClone({});", self.output_path(), self.input_path()))
+                },
+                Inv => todo!(),
+                Extr(_) => todo!(),
             }
         }
         format!(
@@ -225,6 +247,7 @@ impl Codegen for JSCodegen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use IR::*;
     use crate::schema::Ground;
 
     #[test]
@@ -242,28 +265,48 @@ mod tests {
     #[test]
     fn test_js_parse_int() {
         let code = JSCodegen::new("input", "output")
-            .generate(vec![IR::G2G(Ground::String, Ground::Num)].into_iter());
+            .generate(vec![G2G(Ground::String, Ground::Num)].into_iter());
         assert_eq!(
             code,
             "function(input) { output = parseInt(input); return output; }"
         )
     }
 
-    //#[test]
+    #[test]
     fn test_js_parse_int_in_obj() {
         let code = JSCodegen::new("input", "output").generate(
             vec![
-                IR::PushObj,
-                IR::PushKey(Arc::new("foo".to_string())),
-                IR::G2G(Ground::String, Ground::Num),
-                IR::PopKey,
-                IR::PopObj,
+                PushObj,
+                PushKey(Arc::new("foo".to_string())),
+                G2G(Ground::String, Ground::Num),
+                PopKey,
+                PopObj,
             ]
             .into_iter(),
         );
         assert_eq!(
             code,
-            "function(input) { obj0 = {}; obj0.foo = parseInt(input.foo); return obj0 }"
+            "function(input) { let obj0 = {}; obj0.foo = parseInt(input.foo); output = obj0; return output; }"
+        )
+    }
+
+    #[test]
+    fn test_js_parse_int_in_array_in_obj() {
+        let code = JSCodegen::new("input", "output").generate(
+            vec![
+                PushObj,
+                PushKey(Arc::new("foo".to_string())),
+                PushArr,
+                G2G(Ground::String, Ground::Num),
+                PopArr,
+                PopKey,
+                PopObj,
+            ]
+            .into_iter(),
+        );
+        assert_eq!(
+            code,
+            "function(input) { let obj0 = {}; let arr1 = []; for (let idx2 = 0; idx2 < input.foo.length; idx2++) { arr1[idx2] = parseInt(input.foo[idx2]); } obj0.foo = arr1; output = obj0; return output; }"
         )
     }
 
@@ -271,12 +314,39 @@ mod tests {
     fn test_push_arr() {
         let code = JSCodegen::new("input", "output").generate(
             vec![
-                IR::PushArr,
-                IR::G2G(Ground::String, Ground::Num),
-                IR::PopArr,
+                PushArr,
+                G2G(Ground::String, Ground::Num),
+                PopArr,
             ]
             .into_iter(),
         );
         assert_eq!(code, "function(input) { let arr0 = []; for (let idx1 = 0; idx1 < input.length; idx1++) { arr0[idx1] = parseInt(input[idx1]); } output = arr0; return output; }")
+    }
+
+    #[test]
+    fn test_abs_key() {
+        let code = JSCodegen::new("input", "output").generate(
+            vec![
+                PushArr,
+                Abs(Arc::new("foo".to_string())),
+                PopArr,
+            ]
+            .into_iter(),
+        );
+        assert_eq!(code, "function(input) { let arr0 = []; for (let idx1 = 0; idx1 < input.length; idx1++) { arr0[idx1] = {\"foo\": input[idx1] }; } output = arr0; return output; }")
+    }
+
+    #[test]
+    fn test_del_key() {
+        let code = JSCodegen::new("input", "output").generate(
+            vec![
+                PushObj,
+                PushKey(Arc::new("foo".to_string())),
+                PopKey,
+                PopObj,
+            ]
+            .into_iter(),
+        );
+        assert_eq!(code, "function(input) { let obj0 = {}; obj1 = input.foo; obj0.foo = obj1; output = obj0; return obj0; }")
     }
 }
