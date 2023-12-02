@@ -250,6 +250,37 @@ mod tests {
     }
 
     #[test]
+    fn test_deleting_key() {
+        let from = schema!({
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "number"
+                },
+                "bar": {
+                    "type": "boolean"
+                }
+            }
+        });
+        let to = schema!({
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "string"
+                },
+            }
+        });
+        let expected = vec![
+            IR::PushObj,
+            IR::PushKey(Arc::new("foo".to_string())),
+            IR::G2G(Num, String),
+            IR::PopKey,
+            IR::PopObj,
+        ];
+        assert_path!(from, to, expected);
+    }
+
+    #[test]
     fn test_extracting_key() {
         let from = schema!({
             "type": "object",

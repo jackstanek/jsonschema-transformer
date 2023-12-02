@@ -17,4 +17,3 @@ pub enum IR {
     Extr(Arc<String>),
     Inv,
 }
-

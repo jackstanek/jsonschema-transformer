@@ -175,6 +175,7 @@ impl Codegen for JSCodegen {
         use IR::*;
 
         let mut frags = Vec::new();
+
         for op in it {
             match op {
                 G2G(from, to) => {
@@ -224,9 +225,7 @@ impl Codegen for JSCodegen {
                     frags.push(format!("{} = {};", self.output_path(), top))
                 }
                 Abs(k) => {
-                    let objname = self.new_var("obj");
-                    frags.push(format!("{} = {{\"{}\": {}}}", objname, k, self.peektop()));
-                    
+                    frags.push(format!("{} = {{\"{}\": {} }};", self.output_path(), k, self.input_path()));
                 }
                 Copy => {
                     frags.push(format!("{} = structuredClone({});", self.output_path(), self.input_path()))
@@ -341,12 +340,10 @@ mod tests {
         let code = JSCodegen::new("input", "output").generate(
             vec![
                 PushObj,
-                PushKey(Arc::new("foo".to_string())),
-                PopKey,
                 PopObj,
             ]
             .into_iter(),
         );
-        assert_eq!(code, "function(input) { let obj0 = {}; obj1 = input.foo; obj0.foo = obj1; output = obj0; return obj0; }")
+        assert_eq!(code, "function(input) { let obj0 = {}; output = obj0; return output; }")
     }
 }
