@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::BTreeMap, ops::*};
+use std::{cmp::Ordering, collections::BTreeMap, ops::*, sync::Arc, vec};
 
 use crate::{ir::IR, schema::Schema};
 
@@ -57,102 +57,104 @@ pub enum SearchErr {
     NoPath,
 }
 
-pub struct SchemaSearcher<'a> {
-    schema_rels: BTreeMap<(&'a Schema, &'a Schema), Vec<IR>>,
-}
-
-impl<'a> SchemaSearcher<'a> {
+pub struct SchemaSearcher {}
+impl SchemaSearcher {
     pub fn new() -> Self {
-        Self {
-            schema_rels: BTreeMap::new(),
-        }
+        Self {}
     }
 }
 
-impl<'a> Searcher<Schema, IR, SearchErr> for SchemaSearcher<'a> {
+impl Searcher<Schema, IR, SearchErr> for SchemaSearcher {
     fn find_path(&mut self, lhs: &Schema, rhs: &Schema) -> Result<Vec<IR>, SearchErr> {
         use Schema::*;
         use SearchErr::*;
-        match self.schema_rels.get(&(lhs, rhs)) {
-            Some(p) => Ok(p.clone()),
-            None => {
-                let path = match (lhs, rhs) {
-                    (Ground(g1), Ground(g2)) => {
-                        if g1 == g2 {
-                            vec![IR::Copy]
-                        } else {
-                            vec![IR::G2G(*g1, *g2)]
-                        }
-                    }
-                    (Ground(_), Arr(_)) => {
-                        return Err(NoPath); // TODO: Implement this?
-                    }
-                    (Ground(_), Obj(o)) => {
-                        if o.keys().len() != 1 {
-                            return Err(NoPath);
-                        }
-                        let (k, v) = o.iter().nth(0).unwrap();
 
-                        let mut path = self.find_path(lhs, v)?;
-                        path.push(IR::Abs(k.clone()));
-                        path
-                    }
-                    (Arr(_), Ground(_)) => return Err(NoPath),
-                    (Arr(s1), Arr(s2)) => {
-                        let mut inner_conv = self.find_path(&s1, &s2)?;
-                        let mut path = vec![IR::PushArr];
-                        path.append(&mut inner_conv);
-                        path.push(IR::PopArr);
-                        path
-                    }
-                    (Arr(_), Obj(_)) => {
-                        return Err(NoPath); // TODO: Implement array/object inversion
-                    }
-                    (Obj(o), Ground(g1)) => {
-                        let mut path = Vec::new();
-                        for (k, v) in o.iter() {
-                            if let Ground(g2) = v.as_ref() {
-                                if g1 == g2 {
-                                    path.push(IR::Extr(k.clone()));
-                                    break;
-                                }
-                            }
-                        }
-                        if path.len() > 0 {
-                            path
-                        } else {
-                            return Err(NoPath);
-                        }
-                    }
-                    (Obj(_), Arr(_)) => {
-                        return Err(NoPath); // TODO: Implement array/object inversion
-                    }
-                    (Obj(o1), Obj(o2)) => {
-                        let mut path = Vec::new();
-                        for k2 in o2.keys() {
-                            if !o1.contains_key(k2) {
-                                return Err(NoPath);
-                            }
-                        }
-
-                        path.push(IR::PushObj);
-                        for (k1, v1) in o1.iter() {
-                            if let Some(v2) = o2.get(k1) {
-                                let mut key_conv = self.find_path(v1, v2)?;
-                                path.push(IR::PushKey(k1.clone()));
-                                path.append(&mut key_conv);
-                                path.push(IR::PopKey);
-                            }
-                        }
-                        path.push(IR::PopObj);
-                        path
-                    }
-                    (True, _) | (_, True) => vec![],
-                    (False, _) | (_, False) => return Err(NoPath),
-                };
-                Ok(path)
+        let path = match (lhs, rhs) {
+            (Ground(g1), Ground(g2)) => {
+                if g1 == g2 {
+                    vec![IR::Copy]
+                } else {
+                    vec![IR::G2G(*g1, *g2)]
+                }
             }
-        }
+            (Ground(_), Arr(_)) => {
+                return Err(NoPath); // TODO: Implement this?
+            }
+            (Ground(_), Obj(o)) => {
+                if o.keys().len() != 1 {
+                    return Err(NoPath);
+                }
+                let (k, v) = o.iter().nth(0).unwrap();
+
+                let mut path = self.find_path(lhs, v)?;
+                path.push(IR::Abs(k.clone()));
+                path
+            }
+            (Arr(_), Ground(_)) => return Err(NoPath),
+            (Arr(s1), Arr(s2)) => {
+                let mut inner_conv = self.find_path(&s1, &s2)?;
+                let mut path = vec![IR::PushArr];
+                path.append(&mut inner_conv);
+                path.push(IR::PopArr);
+                path
+            }
+            (Arr(items_schema), Obj(_)) => {
+                if let Obj(arr_item_props) = items_schema.as_ref() {
+                    let mut path = vec![IR::Inv];
+                    let inverted = Obj(arr_item_props
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Arc::new(Schema::Arr(v.clone()))))
+                        .collect());
+                    let mut inv_path = self.find_path(&inverted, rhs)?;
+                    path.append(&mut inv_path);
+                    path
+                } else {
+                    return Err(NoPath); // TODO: Implement array/object inversion
+                }
+            }
+            (Obj(o), Ground(g1)) => {
+                let mut path = Vec::new();
+                for (k, v) in o.iter() {
+                    if let Ground(g2) = v.as_ref() {
+                        if g1 == g2 {
+                            path.push(IR::Extr(k.clone()));
+                            break;
+                        }
+                    }
+                }
+                if path.len() > 0 {
+                    path
+                } else {
+                    return Err(NoPath);
+                }
+            }
+            (Obj(prop_schemas), Arr(items_schema)) => {
+                return Err(NoPath); // TODO: Implement array/object inversion
+            }
+            (Obj(o1), Obj(o2)) => {
+                let mut path = Vec::new();
+                for k2 in o2.keys() {
+                    if !o1.contains_key(k2) {
+                        return Err(NoPath);
+                    }
+                }
+
+                path.push(IR::PushObj);
+                for (k1, v1) in o1.iter() {
+                    if let Some(v2) = o2.get(k1) {
+                        let mut key_conv = self.find_path(v1, v2)?;
+                        path.push(IR::PushKey(k1.clone()));
+                        path.append(&mut key_conv);
+                        path.push(IR::PopKey);
+                    }
+                }
+                path.push(IR::PopObj);
+                path
+            }
+            (True, _) | (_, True) => vec![],
+            (False, _) | (_, False) => return Err(NoPath),
+        };
+        Ok(path)
     }
 }
 
@@ -296,6 +298,44 @@ mod tests {
         });
 
         let expected = vec![IR::Extr(Arc::new("foo".to_string()))];
+        assert_path!(from, to, expected);
+    }
+
+    #[test]
+    fn test_compose_modifications_after_invert() {
+        let from = schema!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "foo": {
+                        "type": "number"
+                    },
+                    "bar": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        });
+        let to = schema!({
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "bar": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        });
+
+        let expected = vec![IR::Inv];
         assert_path!(from, to, expected);
     }
 }

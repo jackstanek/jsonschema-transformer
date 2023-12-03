@@ -1,7 +1,5 @@
 use std::{
-    cmp::Ordering,
-    collections::BTreeMap,
-    ops::{Add, AddAssign},
+    collections::{btree_map, BTreeMap},
     sync::Arc,
 };
 
@@ -14,6 +12,8 @@ pub enum SchemaErr {
     InvalidSchema,
     ArrNeedsItems,
     ObjNeedsProperties,
+    InvalidType(String),
+    NoTypeAnnotation,
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -70,7 +70,7 @@ impl TryFrom<&Value> for Schema {
         match value {
             Value::Bool(b) => Ok(Schema::from(*b)),
             Value::Object(obj) => {
-                let ty = obj.get("type").ok_or(InvalidSchema)?;
+                let ty = obj.get("type").ok_or(NoTypeAnnotation)?;
                 if let Value::String(tyname) = ty {
                     return match tyname.as_str() {
                         "number" => Ok(Self::num()),
@@ -100,7 +100,7 @@ impl TryFrom<&Value> for Schema {
                                 Err(ObjNeedsProperties)
                             }
                         }
-                        _ => Err(InvalidSchema),
+                        t => Err(InvalidType(tyname.clone())),
                     };
                 }
                 Err(InvalidSchema)
@@ -111,22 +111,36 @@ impl TryFrom<&Value> for Schema {
 }
 
 impl Schema {
-    fn num() -> Self {
+    pub fn num() -> Self {
         Self::Ground(Ground::Num)
     }
 
-    fn bool() -> Self {
+    pub fn bool() -> Self {
         Self::Ground(Ground::Bool)
     }
 
-    fn string() -> Self {
+    pub fn string() -> Self {
         Self::Ground(Ground::String)
     }
 
-    fn null() -> Self {
+    pub fn null() -> Self {
         Self::Ground(Ground::Null)
     }
 
+    pub fn array(items: Schema) -> Self {
+        Self::Arr(Arc::new(items))
+    }
+
+    pub fn object<I>(props: I) -> Self
+    where
+        I: Iterator<Item = (&'static str, Schema)>,
+    {
+        Self::Obj(
+            props
+                .map(|(k, v)| (Arc::new(k.to_string()), Arc::new(v)))
+                .collect(),
+        )
+    }
 }
 
 // #[cfg(test)]

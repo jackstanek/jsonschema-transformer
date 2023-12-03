@@ -13,7 +13,7 @@
             "maxLength": 50
         },
         "age": {
-            "type": "integer",
+            "type": "number",
             "minimum": 0,
             "maximum": 120
         },
