@@ -1,4 +1,7 @@
-use std::{fmt::{Display, format}, sync::Arc};
+use std::{
+    fmt::{format, Display},
+    sync::Arc,
+};
 
 use crate::{ir::IR, schema::Ground};
 
@@ -120,14 +123,14 @@ impl JSCodegen {
         }
     }
 
-    fn new_var(&mut self, prefix: &str) -> String {
+    fn new_varname(&mut self, prefix: &str) -> String {
         let varname = format!("{}{}", prefix, self.uniq);
         self.uniq += 1;
         varname
     }
 
     fn new_obj(&mut self, prefix: &str) -> Level {
-        let varname = self.new_var(prefix);
+        let varname = self.new_varname(prefix);
         let obj = Level::Var(varname);
         self.varstack.push(obj.clone());
         obj
@@ -165,6 +168,11 @@ impl JSCodegen {
             (_, _) => return None,
         })
     }
+
+    fn pop_and_assign(&mut self) -> String { 
+        let top = self.poptop();
+        format!("{} = {};", self.output_path(), top)
+    }
 }
 
 impl Codegen for JSCodegen {
@@ -184,8 +192,8 @@ impl Codegen for JSCodegen {
                     }
                 }
                 PushArr => {
-                    let arrname = self.new_var("arr");
-                    let idx = self.new_var("idx");
+                    let arrname = self.new_varname("arr");
+                    let idx = self.new_varname("idx");
                     frags.push(format!("let {} = [];", arrname));
                     frags.push(format!(
                         "for (let {} = 0; {} < {}.length; {}++) {{",
@@ -221,8 +229,7 @@ impl Codegen for JSCodegen {
                     frags.push(format!("let {} = {{}};", var));
                 }
                 PopObj => {
-                    let top = self.poptop();
-                    frags.push(format!("{} = {};", self.output_path(), top))
+                    frags.push(self.pop_and_assign());
                 }
                 Abs(k) => {
                     frags.push(format!(
@@ -232,13 +239,22 @@ impl Codegen for JSCodegen {
                         self.input_path()
                     ));
                 }
+                Extr(k) => {
+                    self.new_obj("var");
+                    frags.push(format!(
+                        "let {} = {}.{};",
+                        self.output_path(),
+                        self.input_path(),
+                        k
+                    ));
+                    frags.push(self.pop_and_assign());
+                }
                 Copy => frags.push(format!(
                     "{} = structuredClone({});",
                     self.output_path(),
                     self.input_path()
                 )),
                 Inv => todo!(),
-                Extr(_) => todo!(),
             }
         }
 
@@ -355,7 +371,9 @@ function(input) {
     fn test_push_arr() {
         let code = JSCodegen::new("input", "output")
             .generate(vec![PushArr, G2G(Ground::String, Ground::Num), PopArr].into_iter());
-        assert_eq!(code, "\
+        assert_eq!(
+            code,
+            "\
 function(input) {
     let arr0 = [];
     for (let idx1 = 0; idx1 < input.length; idx1++) {
@@ -363,14 +381,17 @@ function(input) {
     }
     output = arr0;
     return output;
-}")
+}"
+        )
     }
 
     #[test]
     fn test_abs_key() {
         let code = JSCodegen::new("input", "output")
             .generate(vec![PushArr, Abs(Arc::new("foo".to_string())), PopArr].into_iter());
-        assert_eq!(code, "\
+        assert_eq!(
+            code,
+            "\
 function(input) {
     let arr0 = [];
     for (let idx1 = 0; idx1 < input.length; idx1++) {
@@ -378,7 +399,8 @@ function(input) {
     }
     output = arr0;
     return output;
-}")
+}"
+        )
     }
 
     #[test]
@@ -390,6 +412,21 @@ function(input) {
 function(input) {
     let obj0 = {};
     output = obj0;
+    return output;
+}"
+        )
+    }
+
+    #[test]
+    fn test_extr_key() {
+        let code = JSCodegen::new("input", "output")
+            .generate(vec![Extr(Arc::new("foo".to_string()))].into_iter());
+        assert_eq!(
+            code,
+            "\
+function(input) {
+    let var0 = input.foo;
+    output = var0;
     return output;
 }"
         )
