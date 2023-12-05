@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::{Display, format}, sync::Arc};
 
 use crate::{ir::IR, schema::Ground};
 
@@ -207,7 +207,7 @@ impl Codegen for JSCodegen {
                 }
                 PushKey(k) => {
                     self.varstack.push(Key(k));
-                },
+                }
                 PopKey => {
                     if let Some(top) = self.varstack.pop() {
                         if let Key(_) = top {
@@ -225,20 +225,42 @@ impl Codegen for JSCodegen {
                     frags.push(format!("{} = {};", self.output_path(), top))
                 }
                 Abs(k) => {
-                    frags.push(format!("{} = {{\"{}\": {} }};", self.output_path(), k, self.input_path()));
+                    frags.push(format!(
+                        "{} = {{\"{}\": {} }};",
+                        self.output_path(),
+                        k,
+                        self.input_path()
+                    ));
                 }
-                Copy => {
-                    frags.push(format!("{} = structuredClone({});", self.output_path(), self.input_path()))
-                },
+                Copy => frags.push(format!(
+                    "{} = structuredClone({});",
+                    self.output_path(),
+                    self.input_path()
+                )),
                 Inv => todo!(),
                 Extr(_) => todo!(),
             }
         }
+
+        //TODO: Use some AST representation instead of raw strings.
+        let mut indent: usize = 1;
+        let code: String = frags
+            .into_iter()
+            .map(|frag| {
+                if frag.ends_with('}') {
+                    indent -= 1;
+                }
+                let line = format!("{}{}", " ".repeat(4 * indent), frag);
+                if frag.ends_with('{') {
+                    indent += 1;
+                }
+                line
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
         format!(
-            "function({}) {{ {} return {}; }}",
-            self.arg,
-            frags.join(" "),
-            self.retvar,
+            "function({}) {{\n{}\n    return {};\n}}",
+            self.arg, code, self.retvar,
         )
     }
 }
@@ -246,8 +268,8 @@ impl Codegen for JSCodegen {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use IR::*;
     use crate::schema::Ground;
+    use IR::*;
 
     #[test]
     fn test_input_path() {
@@ -311,39 +333,24 @@ mod tests {
 
     #[test]
     fn test_push_arr() {
-        let code = JSCodegen::new("input", "output").generate(
-            vec![
-                PushArr,
-                G2G(Ground::String, Ground::Num),
-                PopArr,
-            ]
-            .into_iter(),
-        );
+        let code = JSCodegen::new("input", "output")
+            .generate(vec![PushArr, G2G(Ground::String, Ground::Num), PopArr].into_iter());
         assert_eq!(code, "function(input) { let arr0 = []; for (let idx1 = 0; idx1 < input.length; idx1++) { arr0[idx1] = parseInt(input[idx1]); } output = arr0; return output; }")
     }
 
     #[test]
     fn test_abs_key() {
-        let code = JSCodegen::new("input", "output").generate(
-            vec![
-                PushArr,
-                Abs(Arc::new("foo".to_string())),
-                PopArr,
-            ]
-            .into_iter(),
-        );
+        let code = JSCodegen::new("input", "output")
+            .generate(vec![PushArr, Abs(Arc::new("foo".to_string())), PopArr].into_iter());
         assert_eq!(code, "function(input) { let arr0 = []; for (let idx1 = 0; idx1 < input.length; idx1++) { arr0[idx1] = {\"foo\": input[idx1] }; } output = arr0; return output; }")
     }
 
     #[test]
     fn test_del_key() {
-        let code = JSCodegen::new("input", "output").generate(
-            vec![
-                PushObj,
-                PopObj,
-            ]
-            .into_iter(),
-        );
-        assert_eq!(code, "function(input) { let obj0 = {}; output = obj0; return output; }")
+        let code = JSCodegen::new("input", "output").generate(vec![PushObj, PopObj].into_iter());
+        assert_eq!(
+            code,
+            "function(input) { let obj0 = {}; output = obj0; return output; }"
+        )
     }
 }
