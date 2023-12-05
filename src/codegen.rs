@@ -289,7 +289,11 @@ mod tests {
             .generate(vec![G2G(Ground::String, Ground::Num)].into_iter());
         assert_eq!(
             code,
-            "function(input) { output = parseInt(input); return output; }"
+            "\
+function(input) {
+    output = parseInt(input);
+    return output;
+}"
         )
     }
 
@@ -307,7 +311,13 @@ mod tests {
         );
         assert_eq!(
             code,
-            "function(input) { let obj0 = {}; obj0.foo = parseInt(input.foo); output = obj0; return output; }"
+            "\
+function(input) {
+    let obj0 = {};
+    obj0.foo = parseInt(input.foo);
+    output = obj0;
+    return output;
+}"
         )
     }
 
@@ -327,7 +337,17 @@ mod tests {
         );
         assert_eq!(
             code,
-            "function(input) { let obj0 = {}; let arr1 = []; for (let idx2 = 0; idx2 < input.foo.length; idx2++) { arr1[idx2] = parseInt(input.foo[idx2]); } obj0.foo = arr1; output = obj0; return output; }"
+            "\
+function(input) {
+    let obj0 = {};
+    let arr1 = [];
+    for (let idx2 = 0; idx2 < input.foo.length; idx2++) {
+        arr1[idx2] = parseInt(input.foo[idx2]);
+    }
+    obj0.foo = arr1;
+    output = obj0;
+    return output;
+}"
         )
     }
 
@@ -335,14 +355,30 @@ mod tests {
     fn test_push_arr() {
         let code = JSCodegen::new("input", "output")
             .generate(vec![PushArr, G2G(Ground::String, Ground::Num), PopArr].into_iter());
-        assert_eq!(code, "function(input) { let arr0 = []; for (let idx1 = 0; idx1 < input.length; idx1++) { arr0[idx1] = parseInt(input[idx1]); } output = arr0; return output; }")
+        assert_eq!(code, "\
+function(input) {
+    let arr0 = [];
+    for (let idx1 = 0; idx1 < input.length; idx1++) {
+        arr0[idx1] = parseInt(input[idx1]);
+    }
+    output = arr0;
+    return output;
+}")
     }
 
     #[test]
     fn test_abs_key() {
         let code = JSCodegen::new("input", "output")
             .generate(vec![PushArr, Abs(Arc::new("foo".to_string())), PopArr].into_iter());
-        assert_eq!(code, "function(input) { let arr0 = []; for (let idx1 = 0; idx1 < input.length; idx1++) { arr0[idx1] = {\"foo\": input[idx1] }; } output = arr0; return output; }")
+        assert_eq!(code, "\
+function(input) {
+    let arr0 = [];
+    for (let idx1 = 0; idx1 < input.length; idx1++) {
+        arr0[idx1] = {\"foo\": input[idx1] };
+    }
+    output = arr0;
+    return output;
+}")
     }
 
     #[test]
@@ -350,7 +386,12 @@ mod tests {
         let code = JSCodegen::new("input", "output").generate(vec![PushObj, PopObj].into_iter());
         assert_eq!(
             code,
-            "function(input) { let obj0 = {}; output = obj0; return output; }"
+            "\
+function(input) {
+    let obj0 = {};
+    output = obj0;
+    return output;
+}"
         )
     }
 }
