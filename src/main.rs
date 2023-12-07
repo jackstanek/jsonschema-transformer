@@ -1,36 +1,10 @@
-use std::fmt::Display;
-
-use egg::{rewrite as rw, *};
-
+mod codegen;
+mod ir;
 mod schema;
+mod searcher;
 
-define_language! {
-    enum Schema {
-        "bool"  = Bool,
-        "num"   = Num,
-        "null"  = Null,
-        "str"   = Str,
-        "arr"   = Arr(Id),
-        "obj"   = Obj([Id; 2]),
-        "pair"  = Pair([Id; 2]),
-        "empty" = Empty,
-        Key(Symbol),
-    }
-}
-
-#[derive(Debug)]
-enum Transformer {
-    // Num2Bool,
-    // RemoveKey,
-    // InvertList,
-    ReorderKeys,
-}
-
-impl Display for Transformer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:?}", self))
-    }
-}
+use codegen::{Codegen, JSCodegen};
+use searcher::Searcher;
 
 fn main() -> Result<(), std::io::Error> {
     let s1_path = std::env::args().nth(1).expect("need first argument");
@@ -46,6 +20,15 @@ fn main() -> Result<(), std::io::Error> {
     let s1 = schema::Schema::try_from(&s1_json).expect("first schema valid");
     let s2 = schema::Schema::try_from(&s2_json).expect("first schema valid");
 
-    println!("edit distance between schemas: {:?}", s1.edit_distance(&s2));
+    let mut schr = searcher::SchemaSearcher::new();
+    let code = schr.find_path(&s1, &s2).and_then(|path| {
+        let gen = JSCodegen::new("input", "output");
+        let code = gen.generate(path.into_iter());
+        Ok(code)
+    });
+    match code {
+        Ok(code) => println!("{}", code),
+        Err(e) => eprintln!("Could not find transformer between schemas: {:?}", e)
+    }
     Ok(())
 }

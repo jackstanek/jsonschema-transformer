@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "properties": {
+    "nullValue": {
+      "type": "null"
+    },
+    "booleanValue": {
+      "type": "boolean"
+    },
+    "objectValue": {
+      "type": "object",
+      "properties": {
+        "foo": {
+            "type": "string"
+        }
+      }
+    },
+    "numberValue": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "nullValue",
+    "booleanValue",
+    "objectValue",
+    "arrayValue",
+    "numberValue",
+    "stringValue"
+  ],
+  "additionalProperties": false
+}

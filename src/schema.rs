@@ -1,57 +1,9 @@
 use std::{
-    cmp::Ordering,
-    collections::BTreeMap,
-    ops::{Add, AddAssign},
+    collections::{btree_map, BTreeMap},
     sync::Arc,
 };
 
 use serde_json::Value;
-
-/// Extended natural numbers (naturals plus infinity). Used for edit distances;
-/// Inf represents a path that doesn't exist. (i.e. all distances of sound
-/// transform paths are of finite length.)
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord)]
-pub enum ExtNat {
-    Nat(u64),
-    Inf,
-}
-
-impl PartialOrd for ExtNat {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        use ExtNat::*;
-        match (self, other) {
-            (Inf, Inf) => None,
-            (Nat(_), Inf) => Some(Ordering::Less),
-            (Inf, Nat(_)) => Some(Ordering::Greater),
-            (Nat(x), Nat(y)) => <u64 as PartialOrd>::partial_cmp(x, y),
-        }
-    }
-}
-
-impl Add for ExtNat {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Self::Inf, _) | (_, Self::Inf) => Self::Inf,
-            (Self::Nat(x), Self::Nat(y)) => Self::Nat(x + y),
-        }
-    }
-}
-
-impl AddAssign<u64> for ExtNat {
-    fn add_assign(&mut self, rhs: u64) {
-        if let Self::Nat(x) = self {
-            *x += rhs
-        }
-    }
-}
-
-impl AddAssign for ExtNat {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs
-    }
-}
 
 /// Error while parsing a [`Schema`] from json. One of these errors will be returned
 /// in the case that the json is not our case of valid.
@@ -60,9 +12,11 @@ pub enum SchemaErr {
     InvalidSchema,
     ArrNeedsItems,
     ObjNeedsProperties,
+    InvalidType(String),
+    NoTypeAnnotation,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Ground {
     Num,
     Bool,
@@ -116,7 +70,7 @@ impl TryFrom<&Value> for Schema {
         match value {
             Value::Bool(b) => Ok(Schema::from(*b)),
             Value::Object(obj) => {
-                let ty = obj.get("type").ok_or(InvalidSchema)?;
+                let ty = obj.get("type").ok_or(NoTypeAnnotation)?;
                 if let Value::String(tyname) = ty {
                     return match tyname.as_str() {
                         "number" => Ok(Self::num()),
@@ -146,7 +100,7 @@ impl TryFrom<&Value> for Schema {
                                 Err(ObjNeedsProperties)
                             }
                         }
-                        _ => Err(InvalidSchema),
+                        t => Err(InvalidType(tyname.clone())),
                     };
                 }
                 Err(InvalidSchema)
@@ -157,176 +111,150 @@ impl TryFrom<&Value> for Schema {
 }
 
 impl Schema {
-    fn num() -> Self {
+    pub fn num() -> Self {
         Self::Ground(Ground::Num)
     }
 
-    fn bool() -> Self {
+    pub fn bool() -> Self {
         Self::Ground(Ground::Bool)
     }
 
-    fn string() -> Self {
+    pub fn string() -> Self {
         Self::Ground(Ground::String)
     }
 
-    fn null() -> Self {
+    pub fn null() -> Self {
         Self::Ground(Ground::Null)
     }
 
-    pub fn edit_distance(&self, other: &Self) -> ExtNat {
-        use ExtNat::*;
-        use Schema::*;
+    pub fn array(items: Schema) -> Self {
+        Self::Arr(Arc::new(items))
+    }
 
-        if self == other {
-            return Nat(0);
-        }
-
-        match (self, other) {
-            // convert an array
-            (Arr(s1), Arr(s2)) => s1.edit_distance(s2),
-            // convert an object property-wise
-            (Obj(o1), Obj(o2)) => {
-                for k in o2.keys() {
-                    if !o1.contains_key(k) {
-                        return Inf;
-                    }
-                }
-
-                let mut dist = Nat(0);
-                for (k, v1) in o1.iter() {
-                    match o2.get(k) {
-                        None => dist += 1,
-                        Some(v2) => dist += v1.edit_distance(v2),
-                    }
-                }
-                return dist;
-            }
-            // extract single property from object
-            (Obj(o1), v2) => {
-                return if o1.values().any(|v1| v1.as_ref() == v2) {
-                    Nat(1)
-                } else {
-                    Inf
-                };
-            }
-            (_, _) => Nat(1),
-        }
+    pub fn object<I>(props: I) -> Self
+    where
+        I: Iterator<Item = (&'static str, Schema)>,
+    {
+        Self::Obj(
+            props
+                .map(|(k, v)| (Arc::new(k.to_string()), Arc::new(v)))
+                .collect(),
+        )
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::ExtNat::*;
-    use super::Schema;
-    use super::Schema::*;
-    use crate::schema;
+// #[cfg(test)]
+// mod tests {
+//     use super::Schema;
+//     use super::Schema::*;
+//     use crate::schema;
 
-    #[test]
-    fn test_same_base_type_edit_dist() {
-        let v1 = Schema::bool();
-        let v2 = Schema::bool();
-        assert_eq!(v1.edit_distance(&v2), Nat(0));
-    }
+//     #[test]
+//     fn test_same_base_type_edit_dist() {
+//         let v1 = Schema::bool();
+//         let v2 = Schema::bool();
+//         assert_eq!(v1.edit_distance(&v2), Nat(0));
+//     }
 
-    #[test]
-    fn test_base_type_edit_dist() {
-        let v1 = Schema::bool();
-        let v2 = Schema::num();
-        assert_eq!(v1.edit_distance(&v2), Nat(1));
-    }
+//     #[test]
+//     fn test_base_type_edit_dist() {
+//         let v1 = Schema::bool();
+//         let v2 = Schema::num();
+//         assert_eq!(v1.edit_distance(&v2), Nat(1));
+//     }
 
-    #[test]
-    fn test_arr_type_edit_dist() {
-        let v1 = schema!({
-            "type": "array",
-            "items": {
-                "type": "boolean"
-            }
-        });
-        let v2 = schema!({
-            "type": "array",
-            "items": {
-                "type": "number"
-            }
-        });
-        assert_eq!(v1.edit_distance(&v2), Nat(1))
-    }
+//     #[test]
+//     fn test_arr_type_edit_dist() {
+//         let v1 = schema!({
+//             "type": "array",
+//             "items": {
+//                 "type": "boolean"
+//             }
+//         });
+//         let v2 = schema!({
+//             "type": "array",
+//             "items": {
+//                 "type": "number"
+//             }
+//         });
+//         assert_eq!(v1.edit_distance(&v2), Nat(1))
+//     }
 
-    #[test]
-    fn test_flat_obj_typ_edit_dist() {
-        let v1 = schema!({
-            "type": "object",
-            "properties": {
-                "foo": {
-                    "type": "number"
-                },
-                "bar": {
-                    "type": "boolean"
-                }
-            }
-        });
-        let v2 = schema!({
-            "type": "object",
-            "properties": {
-                "foo": {
-                    "type": "string"
-                },
-                "bar": {
-                    "type": "string"
-                }
-            }
-        });
-        assert_eq!(v1.edit_distance(&v2), Nat(2))
-    }
+//     #[test]
+//     fn test_flat_obj_typ_edit_dist() {
+//         let v1 = schema!({
+//             "type": "object",
+//             "properties": {
+//                 "foo": {
+//                     "type": "number"
+//                 },
+//                 "bar": {
+//                     "type": "boolean"
+//                 }
+//             }
+//         });
+//         let v2 = schema!({
+//             "type": "object",
+//             "properties": {
+//                 "foo": {
+//                     "type": "string"
+//                 },
+//                 "bar": {
+//                     "type": "string"
+//                 }
+//             }
+//         });
+//         assert_eq!(v1.edit_distance(&v2), Nat(2))
+//     }
 
-    // change path to wherever your project is located
-    #[test]
-    fn test_open_file() {
-        let path = "/Users/dkillough/Desktop/gradschool/jsonschema-transformer/schemas/simple.json";
-        let file = std::fs::read_to_string(path).unwrap();
-        let json_schema: serde_json::Value = serde_json::from_str(&file).unwrap();
-        let testjson = schema!(
-            {
-                "type": "object",
-                "properties": {
-                  "nullValue": {
-                    "type": "null"
-                  },
-                  "booleanValue": {
-                    "type": "boolean"
-                  },
-                  "objectValue": {
-                    "type": "object",
-                    "properties": {
-                        "foo": {
-                            "type": "string"
-                        },
-                    }
-                  },
-                  "arrayValue": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                  },
-                  "numberValue": {
-                    "type": "number"
-                  },
-                  "stringValue": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "nullValue",
-                  "booleanValue",
-                  "objectValue",
-                  "arrayValue",
-                  "numberValue",
-                  "stringValue"
-                ],
-                "additionalProperties": false
-              }
-        );
-        assert_eq!(testjson, super::Schema::try_from(&json_schema).unwrap());
-    }
-}
+//     // change path to wherever your project is located
+//     #[test]
+//     fn test_open_file() {
+//         let path = "/Users/dkillough/Desktop/gradschool/jsonschema-transformer/schemas/simple.json";
+//         let file = std::fs::read_to_string(path).unwrap();
+//         let json_schema: serde_json::Value = serde_json::from_str(&file).unwrap();
+//         let testjson = schema!(
+//             {
+//                 "type": "object",
+//                 "properties": {
+//                   "nullValue": {
+//                     "type": "null"
+//                   },
+//                   "booleanValue": {
+//                     "type": "boolean"
+//                   },
+//                   "objectValue": {
+//                     "type": "object",
+//                     "properties": {
+//                         "foo": {
+//                             "type": "string"
+//                         },
+//                     }
+//                   },
+//                   "arrayValue": {
+//                     "type": "array",
+//                     "items": {
+//                         "type": "string"
+//                     }
+//                   },
+//                   "numberValue": {
+//                     "type": "number"
+//                   },
+//                   "stringValue": {
+//                     "type": "string"
+//                   }
+//                 },
+//                 "required": [
+//                   "nullValue",
+//                   "booleanValue",
+//                   "objectValue",
+//                   "arrayValue",
+//                   "numberValue",
+//                   "stringValue"
+//                 ],
+//                 "additionalProperties": false
+//               }
+//         );
+//         assert_eq!(testjson, super::Schema::try_from(&json_schema).unwrap());
+//     }
+// }
